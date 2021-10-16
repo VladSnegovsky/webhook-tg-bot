@@ -177,7 +177,7 @@ def change_age(message):
             msg = bot.send_message(chat_id, 'Вік повинен бути від 2х до 102х років!', reply_markup=keyboard)
             bot.register_next_step_handler(msg, change_age)
         else:
-            db.db.set_age(message.from_user.id, int(age))
+            db.set_age(message.from_user.id, int(age))
             send_menu(message)
     except Exception as e:
         print(e)
