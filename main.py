@@ -7,8 +7,8 @@ from flask import Flask, request
 import database
 
 
-API_TOKEN = '2026677724:AAFY67mpk3KdxIV0LfvMgB25Zec3BH6tgUc'
-APP_URL = f'https://webhook-tg-bot1234.herokuapp.com/{API_TOKEN}'
+API_TOKEN = '2089966817:AAGKsEfyqufqum--MmO-i6VBfLyF-SEH8SI'
+APP_URL = f'https://test-task1234.herokuapp.com/{API_TOKEN}'
 
 bot = telebot.TeleBot(API_TOKEN)
 server = Flask(__name__)
@@ -18,15 +18,8 @@ db = database.DataBase()
 @bot.message_handler(commands=['help', 'start'])
 def send_welcome(message):
     db.add_user(message.from_user.id)
-    msg = bot.send_message(message.chat.id, """Ім'я?""")
+    msg = bot.send_message(message.chat.id, "Ім'я?")
     bot.register_next_step_handler(msg, process_name_step)
-
-
-def delete_buttons(call):
-    try:
-        bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
-    except Exception as e:
-        print("Can't update message")
 
 
 def process_name_step(message):
@@ -39,12 +32,13 @@ def process_name_step(message):
         else:
             db.set_name(message.from_user.id, name)
 
-            back = types.InlineKeyboardButton(text='Назад', callback_data='Назад до імені')
-            keyboard = types.InlineKeyboardMarkup().add(back)
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add('Назад')
 
-            msg = bot.send_message(chat_id, 'Вік?', reply_markup=keyboard)
+            msg = bot.send_message(chat_id, 'Вік?', reply_markup=markup)
             bot.register_next_step_handler(msg, process_age_step)
     except Exception as e:
+        print(e)
         bot.reply_to(message, 'Помилка!')
 
 
@@ -52,7 +46,10 @@ def process_age_step(message):
     try:
         chat_id = message.chat.id
         age = message.text
-        if not age.isdigit():
+        if age == 'Назад':
+            bot.clear_step_handler_by_chat_id(chat_id=message.chat.id)
+            send_welcome(message)
+        elif not age.isdigit():
             msg = bot.send_message(chat_id, 'Вік повинен бути записаний числом!')
             bot.register_next_step_handler(msg, process_age_step)
         elif int(age) < 2 or int(age) > 102:
@@ -61,124 +58,165 @@ def process_age_step(message):
         else:
             db.set_age(message.from_user.id, int(age))
 
-            male = types.InlineKeyboardButton(text='Чоловік', callback_data='Чоловік')
-            female = types.InlineKeyboardButton(text='Жінка', callback_data='Жінка')
-            third = types.InlineKeyboardButton(text='Ще не визначився:)', callback_data='Ще не визначився:)')
-            back = types.InlineKeyboardButton(text='Назад', callback_data='Назад до віку')
-            keyboard = types.InlineKeyboardMarkup().add(male, female).add(third).add(back)
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add('Жінка', 'Чоловік', 'Ще не визначився:)', 'Назад')
 
-            bot.send_message(chat_id, 'Стать?', reply_markup=keyboard)
+            msg = bot.send_message(chat_id, 'Стать?', reply_markup=markup)
+            bot.register_next_step_handler(msg, process_sex_step)
     except Exception as e:
+        print(e)
+        bot.reply_to(message, 'Помилка!')
+
+
+def process_sex_step(message):
+    try:
+        sex = message.text
+        if sex == 'Назад':
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add('Назад')
+            msg = bot.send_message(message.chat.id, 'Вік?', reply_markup=markup)
+            bot.register_next_step_handler(msg, process_age_step)
+        elif sex in ['Жінка', 'Чоловік', 'Ще не визначився:)']:
+            db.set_sex(message.from_user.id, sex)
+            bot.clear_step_handler_by_chat_id(chat_id=message.chat.id)
+            send_menu(message)
+        else:
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add('Жінка', 'Чоловік', 'Ще не визначився:)')
+            msg = bot.send_message(message.chat.id, 'Немає такого варіанту!', reply_markup=markup)
+            bot.register_next_step_handler(msg, process_sex_step)
+    except Exception as e:
+        print(e)
         bot.reply_to(message, 'Помилка!')
 
 
 def send_menu(message):
-    settings = types.InlineKeyboardButton(text='Налаштування', callback_data='Налаштування')
-    information = types.InlineKeyboardButton(text='Інформація про мене', callback_data='Інформація')
-    keyboard = types.InlineKeyboardMarkup().add(settings, information)
-    bot.send_message(message.chat.id, 'Головне меню', reply_markup=keyboard)
+    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+    markup.add('Налаштування', 'Інформація про мене')
+    msg = bot.send_message(message.chat.id, 'Головне меню', reply_markup=markup)
+    bot.register_next_step_handler(msg, process_menu_step)
 
 
-@bot.callback_query_handler(func=lambda call: True)
-def iq_callback(call):
-    delete_buttons(call)
-    if call.data in ['Чоловік', 'Жінка', 'Ще не визначився:)']:
-        db.set_sex(call.from_user.id, call.data)
-        send_menu(call.message)
-    elif call.data == 'Назад до імені':
-        bot.clear_step_handler_by_chat_id(chat_id=call.message.chat.id)
-        send_welcome(call.message)
-    elif call.data == "Назад до віку":
-        bot.clear_step_handler_by_chat_id(chat_id=call.message.chat.id)
-        back = types.InlineKeyboardButton(text='Назад', callback_data='Назад до імені')
-        keyboard = types.InlineKeyboardMarkup().add(back)
+def process_menu_step(message):
+    try:
+        action = message.text
 
-        msg = bot.send_message(call.message.chat.id, 'Вік?', reply_markup=keyboard)
-        bot.register_next_step_handler(msg, process_age_step)
-    elif call.data == "Інформація":
-        information = db.get_information(call.from_user.id)
-        bot.send_message(call.message.chat.id, f"Ім'я: {information[0][1]}\n"
+        if action == 'Налаштування':
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add("Змінити ім'я", 'Змінити вік', 'Змінити стать', 'Назад')
+            msg = bot.send_message(message.chat.id, 'Налаштування', reply_markup=markup)
+            bot.register_next_step_handler(msg, process_settings)
+        elif action == 'Інформація про мене':
+            information = db.get_information(message.from_user.id)
+            bot.send_message(message.chat.id, f"Ім'я: {information[0][1]}\n"
                                                f"Вік: {information[0][2]}\n"
                                                f"Стать: {information[0][3]}")
-        send_menu(call.message)
-    elif call.data == "Налаштування":
-        ch_name = types.InlineKeyboardButton(text="Змінити ім'я", callback_data="Змінити ім'я")
-        ch_age = types.InlineKeyboardButton(text='Змінити вік', callback_data='Змінити вік')
-        ch_sex = types.InlineKeyboardButton(text='Змінити стать', callback_data='Змінити стать')
-        back = types.InlineKeyboardButton(text='Назад', callback_data='Назад до меню')
-        keyboard = types.InlineKeyboardMarkup().add(ch_name, ch_age).add(ch_sex).add(back)
-
-        bot.send_message(call.message.chat.id, 'Налаштування', reply_markup=keyboard)
-    elif call.data == "Змінити ім'я":
-        back = types.InlineKeyboardButton(text='Назад', callback_data='Назад до налаштувань1')
-        keyboard = types.InlineKeyboardMarkup().add(back)
-        msg = bot.send_message(call.message.chat.id, "Напишіть нове ім'я", reply_markup=keyboard)
-        bot.register_next_step_handler(msg, change_name)
-    elif call.data == "Змінити вік":
-        back = types.InlineKeyboardButton(text='Назад', callback_data='Назад до налаштувань1')
-        keyboard = types.InlineKeyboardMarkup().add(back)
-        msg = bot.send_message(call.message.chat.id, "Напишіть новий вік", reply_markup=keyboard)
-        bot.register_next_step_handler(msg, change_age)
-    elif call.data == "Змінити стать":
-        male = types.InlineKeyboardButton(text='Чоловік', callback_data='Чоловік')
-        female = types.InlineKeyboardButton(text='Жінка', callback_data='Жінка')
-        third = types.InlineKeyboardButton(text='Ще не визначився:)', callback_data='Ще не визначився:)')
-        back = types.InlineKeyboardButton(text='Назад', callback_data='Назад до налаштувань')
-        keyboard = types.InlineKeyboardMarkup().add(male, female).add(third).add(back)
-        bot.send_message(call.message.chat.id, "Оберіть нову стать", reply_markup=keyboard)
-    elif call.data == "Назад до меню":
-        send_menu(call.message)
-    elif call.data == "Назад до налаштувань1":
-        bot.clear_step_handler_by_chat_id(chat_id=call.message.chat.id)
-        ch_name = types.InlineKeyboardButton(text="Змінити ім'я", callback_data="Змінити ім'я")
-        ch_age = types.InlineKeyboardButton(text='Змінити вік', callback_data='Змінити вік')
-        ch_sex = types.InlineKeyboardButton(text='Змінити стать', callback_data='Змінити стать')
-        back = types.InlineKeyboardButton(text='Назад', callback_data='Назад до меню')
-        keyboard = types.InlineKeyboardMarkup().add(ch_name, ch_age).add(ch_sex).add(back)
-        bot.send_message(call.message.chat.id, 'Налаштування', reply_markup=keyboard)
-    elif call.data == "Назад до налаштувань":
-        ch_name = types.InlineKeyboardButton(text="Змінити ім'я", callback_data="Змінити ім'я")
-        ch_age = types.InlineKeyboardButton(text='Змінити вік', callback_data='Змінити вік')
-        ch_sex = types.InlineKeyboardButton(text='Змінити стать', callback_data='Змінити стать')
-        back = types.InlineKeyboardButton(text='Назад', callback_data='Назад до меню')
-        keyboard = types.InlineKeyboardMarkup().add(ch_name, ch_age).add(ch_sex).add(back)
-        bot.send_message(call.message.chat.id, 'Налаштування', reply_markup=keyboard)
+            send_menu(message)
+        else:
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add('Налаштування', 'Інформація про мене')
+            msg = bot.send_message(message.chat.id, 'Немає такого пункту меню!', reply_markup=markup)
+            bot.register_next_step_handler(msg, process_menu_step)
+    except Exception as e:
+        print(e)
+        bot.reply_to(message, 'Помилка!')
 
 
-def change_name(message):
+def process_settings(message):
     try:
-        chat_id = message.chat.id
+        action = message.text
+
+        if action == 'Назад':
+            bot.clear_step_handler_by_chat_id(chat_id=message.chat.id)
+            send_menu(message)
+        elif action == "Змінити ім'я":
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add('Назад')
+            msg = bot.send_message(message.chat.id, "Введіть нове ім'я", reply_markup=markup)
+            bot.register_next_step_handler(msg, process_change_name)
+        elif action == 'Змінити вік':
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add('Назад')
+            msg = bot.send_message(message.chat.id, "Введіть новий вік", reply_markup=markup)
+            bot.register_next_step_handler(msg, process_change_age)
+        elif action == 'Змінити стать':
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add('Жінка', 'Чоловік', 'Ще не визначився:)', 'Назад')
+            msg = bot.send_message(message.chat.id, "Оберіть нову стать", reply_markup=markup)
+            bot.register_next_step_handler(msg, process_change_sex)
+        else:
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add("Змінити ім'я", 'Змінити вік', 'Змінити стать')
+            msg = bot.send_message(message.chat.id, 'Немає такого пункту меню!', reply_markup=markup)
+            bot.register_next_step_handler(msg, process_settings)
+    except Exception as e:
+        print(e)
+        bot.reply_to(message, 'Помилка!')
+
+
+def process_change_name(message):
+    try:
         name = message.text
-        if len(name) < 2 or len(name) > 20:
-            back = types.InlineKeyboardButton(text='Назад', callback_data='Назад до налаштувань1')
-            keyboard = types.InlineKeyboardMarkup().add(back)
-            msg = bot.send_message(chat_id, "Ім'я має бути довжиною від 2х до 20 символів!", reply_markup=keyboard)
-            bot.register_next_step_handler(msg, change_name)
+        if name == 'Назад':
+            bot.clear_step_handler_by_chat_id(chat_id=message.chat.id)
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add("Змінити ім'я", 'Змінити вік', 'Змінити стать', 'Назад')
+            msg = bot.send_message(message.chat.id, 'Налаштування', reply_markup=markup)
+            bot.register_next_step_handler(msg, process_settings)
+        elif len(name) < 2 or len(name) > 20:
+            msg = bot.send_message(message.chat.id, "Ім'я має бути довжиною від 2х до 20 символів!")
+            bot.register_next_step_handler(msg, process_change_name)
         else:
             db.set_name(message.from_user.id, name)
+            bot.clear_step_handler_by_chat_id(chat_id=message.chat.id)
             send_menu(message)
     except Exception as e:
         print(e)
         bot.reply_to(message, 'Помилка!')
 
 
-def change_age(message):
+def process_change_age(message):
     try:
-        chat_id = message.chat.id
         age = message.text
-        if not age.isdigit():
-            back = types.InlineKeyboardButton(text='Назад', callback_data='Назад до налаштувань1')
-            keyboard = types.InlineKeyboardMarkup().add(back)
-            msg = bot.send_message(chat_id, 'Вік повинен бути записаний числом!', reply_markup=keyboard)
-            bot.register_next_step_handler(msg, change_age)
+        if age == 'Назад':
+            bot.clear_step_handler_by_chat_id(chat_id=message.chat.id)
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add("Змінити ім'я", 'Змінити вік', 'Змінити стать', 'Назад')
+            msg = bot.send_message(message.chat.id, 'Налаштування', reply_markup=markup)
+            bot.register_next_step_handler(msg, process_settings)
+        elif not age.isdigit():
+            msg = bot.send_message(message.chat.id, 'Вік повинен бути записаний числом!')
+            bot.register_next_step_handler(msg, process_change_age)
         elif int(age) < 2 or int(age) > 102:
-            back = types.InlineKeyboardButton(text='Назад', callback_data='Назад до налаштувань1')
-            keyboard = types.InlineKeyboardMarkup().add(back)
-            msg = bot.send_message(chat_id, 'Вік повинен бути від 2х до 102х років!', reply_markup=keyboard)
-            bot.register_next_step_handler(msg, change_age)
+            msg = bot.send_message(message.chat.id, 'Вік повинен бути від 2х до 102х років!')
+            bot.register_next_step_handler(msg, process_change_age)
         else:
             db.set_age(message.from_user.id, int(age))
+            bot.clear_step_handler_by_chat_id(chat_id=message.chat.id)
             send_menu(message)
+    except Exception as e:
+            print(e)
+            bot.reply_to(message, 'Помилка!')
+
+
+def process_change_sex(message):
+    try:
+        sex = message.text
+        if sex == 'Назад':
+            bot.clear_step_handler_by_chat_id(chat_id=message.chat.id)
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add("Змінити ім'я", 'Змінити вік', 'Змінити стать', 'Назад')
+            msg = bot.send_message(message.chat.id, 'Налаштування', reply_markup=markup)
+            bot.register_next_step_handler(msg, process_settings)
+        elif sex in [u'Жінка', u'Чоловік', u'Ще не визначився:)']:
+            db.set_sex(message.from_user.id, sex)
+            bot.clear_step_handler_by_chat_id(chat_id=message.chat.id)
+            send_menu(message)
+        else:
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add('Жінка', 'Чоловік', 'Ще не визначився:)', 'Назад')
+            msg = bot.send_message(message.chat.id, 'Немає такого варіанту!', reply_markup=markup)
+            bot.register_next_step_handler(msg, process_change_sex)
     except Exception as e:
         print(e)
         bot.reply_to(message, 'Помилка!')
@@ -186,7 +224,6 @@ def change_age(message):
 
 bot.enable_save_next_step_handlers(delay=2)
 bot.load_next_step_handlers()
-
 
 @server.route('/' + API_TOKEN, methods=['POST'])
 def get_message():
