@@ -1,0 +1,5 @@
+DB_NAME = "hfgdsvoy"
+DB_USER = "hfgdsvoy"
+DB_PASS = "gvpCUVWWPmyBtSBQqZJznaem05SCb2PZ"
+DB_HOST = "hattie.db.elephantsql.com"
+DB_PORT = "5432"
